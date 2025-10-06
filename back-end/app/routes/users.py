@@ -75,15 +75,21 @@ def create_user():
     email = data.get("email")
     senha = data.get("senha")
 
-    conn = get_db_connection()
+    if not all([username, nome, sobrenome, email, senha]):
+        return jsonify({"error": "Todos os campos são obrigatórios!"}), 400
 
+    conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
-    
+
     cursor = conn.cursor()
 
     try:
-        cursor.execute("INSERT INTO usuarios (username, nome, sobrenome, email, senha, inativo) VALUES (%s, %s, %s, %s, %s, %s)", (username, nome, sobrenome, email, senha, 1))
+        cursor.execute("SELECT id FROM usuarios WHERE username = %s OR email = %s", (username, email))
+        if cursor.fetchone():
+            return jsonify({"error": "Usuário ou e-mail já cadastrado!"}), 409
+        
+        cursor.execute( "INSERT INTO usuarios (username, nome, sobrenome, email, senha, inativo) VALUES (%s, %s, %s, %s, %s, 0)", (username, nome, sobrenome, email, senha))
         conn.commit()
         user_id = cursor.lastrowid
 
@@ -96,9 +102,14 @@ def create_user():
             "email": email
         }), 201
 
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Erro ao criar usuário: {str(e)}"}), 500
+
     finally:
         cursor.close()
         conn.close()
+
 
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
@@ -109,16 +120,29 @@ def update_user(user_id):
     email = data.get("email")
     senha = data.get("senha")
 
-    conn = get_db_connection()
+    if not all([username, nome, sobrenome, email, senha]):
+        return jsonify({"error": "Todos os campos são obrigatórios!"}), 400
 
+    conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
-    
+
     cursor = conn.cursor()
 
     try:
+        cursor.execute("SELECT id FROM usuarios WHERE id = %s", (user_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Usuário não encontrado!"}), 404
+
+        cursor.execute("SELECT id FROM usuarios WHERE (username = %s OR email = %s) AND id != %s", (username, email, user_id))
+        if cursor.fetchone():
+            return jsonify({"error": "Usuário ou e-mail já cadastrado!"}), 409
+
         cursor.execute("UPDATE usuarios SET username = %s, nome = %s, sobrenome = %s, email = %s, senha = %s WHERE id = %s", (username, nome, sobrenome, email, senha, user_id))
         conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({"message": "Nenhuma alteração foi feita."}), 200
 
         return jsonify({
             "message": "Usuário atualizado com sucesso!",
@@ -128,9 +152,13 @@ def update_user(user_id):
             "email": email
         }), 200
 
+    except Exception as e:
+        return jsonify({"error": f"Erro ao atualizar usuário: {str(e)}"}), 500
+
     finally:
         cursor.close()
         conn.close()
+
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
@@ -139,13 +167,27 @@ def delete_user(user_id):
         return jsonify({"error": "Erro na conexão com o banco"}), 500
 
     cursor = conn.cursor()
+
     try:
+        cursor.execute("SELECT inativo FROM usuarios WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+
+        if not user:
+            return jsonify({"error": f"Usuário não encontrado!"}), 404
+        
+        if user[0] == 1:
+            return jsonify({"message": "Usuário já está inativo."}), 200
+
         cursor.execute("UPDATE usuarios SET inativo = 1 WHERE id = %s", (user_id,))
         conn.commit()
 
         return jsonify({
-            "message": f"Usuário {user_id} deletado com sucesso!"
+            "message": f"Usuário {user_id} inativado com sucesso!"
         }), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Erro ao inativar usuário: {str(e)}"}), 500
 
     finally:
         cursor.close()
@@ -154,20 +196,34 @@ def delete_user(user_id):
 @users_bp.route('/login', methods=['POST'])
 def login():
     data = request.json
-    email = data.get("email")
+    login = data.get("login")
     senha = data.get("senha")
+
+    if not login or not senha:
+        return jsonify({"error": "E-mail ou Usuário e senha são obrigatórios!"}), 400
 
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
 
     cursor = conn.cursor()
+
     try:
-        cursor.execute("SELECT id, username, senha FROM usuarios WHERE email = %s AND inativo = 0", (email,))
+        if "@" in login:
+            cursor.execute("SELECT id, username, senha, inativo FROM usuarios WHERE email = %s", (login,))
+        else:
+            cursor.execute("SELECT id, username, senha, inativo FROM usuarios WHERE username = %s", (login,))
+        
         user = cursor.fetchone()
 
-        if not user or user[2] != senha:
-            return jsonify({"error": "Email ou senha incorretos"}), 401
+        if not user:
+            return jsonify({"error": "Usuário não encontrado!"}), 404
+
+        if user[3] == 1:
+            return jsonify({"error": "Usuário inativo. Entre em contato com o suporte."}), 403
+
+        if user[2] != senha:
+            return jsonify({"error": "E-mail/Usuário ou senha incorretos."}), 401
 
         session['user_id'] = user[0]
 
@@ -177,9 +233,13 @@ def login():
             "username": user[1]
         }), 200
 
+    except Exception as e:
+        return jsonify({"error": f"Erro ao efetuar login: {str(e)}"}), 500
+
     finally:
         cursor.close()
         conn.close()
+
 
 @users_bp.route('/logout', methods=['POST'])
 def logout():
