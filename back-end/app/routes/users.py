@@ -1,5 +1,6 @@
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, Response, jsonify, request
 from app.db import get_db_connection
+import json
 
 users_bp = Blueprint('users', __name__)
 
@@ -26,15 +27,15 @@ def get_user(user_id):
             "sobrenome": user_data[3],
             "email": user_data[4]
         }
-
-        return jsonify(user)
+        
+        return Response(json.dumps(user, ensure_ascii=False, indent=2), content_type="application/json; charset=utf-8"), 200
 
     finally:
         cursor.close()
         conn.close()
 
 
-@users_bp.route('/', methods=['POST'])
+@users_bp.route('/create/', methods=['POST'])
 def create_user():
     data = request.json
     username = data.get("username")
@@ -79,7 +80,7 @@ def create_user():
         conn.close()
 
 
-@users_bp.route('/<int:user_id>', methods=['PUT'])
+@users_bp.route('/update/<int:user_id>', methods=['PUT'])
 def update_user(user_id):
     data = request.json
     username = data.get("username")
@@ -128,7 +129,7 @@ def update_user(user_id):
         conn.close()
 
 
-@users_bp.route('/change-password', methods=['PUT'])
+@users_bp.route('/changePassword/', methods=['PUT'])
 def change_password():
     data = request.json
     username = data.get("username")
@@ -174,7 +175,7 @@ def change_password():
         conn.close()
 
 
-@users_bp.route('/<int:user_id>', methods=['DELETE'])
+@users_bp.route('/delete/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     conn = get_db_connection()
     if not conn:
