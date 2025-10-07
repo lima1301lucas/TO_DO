@@ -1,4 +1,5 @@
 from flask import Flask
+from .routes.auth import auth_bp
 from .routes.tasks import tasks_bp
 from .routes.users import users_bp
 from dotenv import load_dotenv
@@ -11,7 +12,7 @@ def create_app():
 
     # Pegar a SECRET_KEY do .env
     app.secret_key = os.getenv("SECRET_KEY")
-
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(tasks_bp, url_prefix='/api/tasks')
     app.register_blueprint(users_bp, url_prefix='/api/users')
 
