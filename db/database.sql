@@ -25,11 +25,12 @@ CREATE TABLE tarefas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     title VARCHAR(100) NOT NULL,
+    concluido TINYINT(1) DEFAULT 0,
     description TEXT,
     priority_id INT NOT NULL,
     category_id INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    end_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES usuarios(id),
     FOREIGN KEY (priority_id) REFERENCES prioridades(id),
     FOREIGN KEY (category_id) REFERENCES categorias(id)
