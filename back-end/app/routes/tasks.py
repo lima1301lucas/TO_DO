@@ -1,13 +1,16 @@
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, request, session
 from collections import defaultdict
 from app.db import get_db_connection
 import MySQLdb, json
 
 tasks_bp = Blueprint('tasks', __name__)
 
-@tasks_bp.route('/<int:user_id>', methods=['GET'])
-def get_tasks(user_id):
-
+@tasks_bp.route('/', methods=['GET'])
+def get_tasks():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
@@ -62,8 +65,13 @@ def get_tasks(user_id):
         conn.close()
 
 
-@tasks_bp.route('<int:user_id>/<int:task_id>', methods=['GET'])
-def get_task_by_id(user_id, task_id):
+@tasks_bp.route('/<int:task_id>', methods=['GET'])
+def get_task_by_id(task_id):
+        
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
@@ -88,10 +96,11 @@ def get_task_by_id(user_id, task_id):
         """, (task_id, user_id))
 
         task = cursor.fetchone()
-        task["created_at"] = task["created_at"].strftime("%d/%m/%Y") if task["created_at"] else None
-        task["end_at"] = task["end_at"].strftime("%d/%m/%Y") if task["end_at"] else None
         if not task:
             return jsonify({"error": "Tarefa não encontrada!"}), 404
+    
+        task["created_at"] = task["created_at"].strftime("%d/%m/%Y") if task["created_at"] else None
+        task["end_at"] = task["end_at"].strftime("%d/%m/%Y") if task["end_at"] else None
 
         return Response(json.dumps(task, ensure_ascii=False, indent=2), content_type="application/json; charset=utf-8"), 200
 
@@ -102,17 +111,18 @@ def get_task_by_id(user_id, task_id):
 
 @tasks_bp.route('/insert/', methods=['POST'])
 def create_task():
+
     data = request.json
     title = data.get('title')
     description = data.get('description')
     end_at = data.get('end_at')
-    user_id = data.get('user_id')
     priority_id = data.get('priority_id')
     category_id = data.get('category_id')
 
-    if not all([title, description, end_at, user_id, priority_id, category_id]):
-        return jsonify({"error": "Todos os campos são obrigatórios!"}), 400
-
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
@@ -135,8 +145,9 @@ def create_task():
         conn.close()
 
 
-@tasks_bp.route('/upadate/<int:task_id>', methods=['PUT'])
+@tasks_bp.route('/update/<int:task_id>', methods=['PUT'])
 def update_task(task_id):
+    
     data = request.json
     title = data.get('title')
     description = data.get('description')
@@ -147,6 +158,10 @@ def update_task(task_id):
     if not all([title, description, end_at, priority_id, category_id]):
         return jsonify({"error": "Todos os campos são obrigatórios!"}), 400
 
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
@@ -176,6 +191,11 @@ def update_task(task_id):
 
 @tasks_bp.route('/changeStatus/<int:task_id>', methods=['PUT'])
 def complete_task(task_id):
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
@@ -201,6 +221,11 @@ def complete_task(task_id):
 
 @tasks_bp.route('/delete/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500

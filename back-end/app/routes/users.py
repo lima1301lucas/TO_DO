@@ -1,20 +1,23 @@
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, request, session
 from app.db import get_db_connection
 import json
 
 users_bp = Blueprint('users', __name__)
 
-@users_bp.route('/<int:user_id>', methods=['GET'])
-def get_user(user_id):
+@users_bp.route('/', methods=['GET'])
+def get_user():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+    
     conn = get_db_connection()
-
     if not conn:
         return jsonify({"error": "Erro na conexão ao banco"}), 500
     
     cursor = conn.cursor()
 
     try:
-        cursor.execute("SELECT id, username, nome, sobrenome, email FROM usuarios WHERE id = %s",(user_id,))
+        cursor.execute("SELECT id, username, nome, sobrenome, email FROM usuarios WHERE id = %s",(user_id))
         user_data = cursor.fetchone()
 
         if not user_data:
@@ -35,7 +38,7 @@ def get_user(user_id):
         conn.close()
 
 
-@users_bp.route('/create/', methods=['POST'])
+@users_bp.route('/create', methods=['POST'])
 def create_user():
     data = request.json
     username = data.get("username")
@@ -80,8 +83,9 @@ def create_user():
         conn.close()
 
 
-@users_bp.route('/update/<int:user_id>', methods=['PUT'])
-def update_user(user_id):
+@users_bp.route('/update', methods=['PUT'])
+def update_user():
+    
     data = request.json
     username = data.get("username")
     nome = data.get("nome")
@@ -91,6 +95,10 @@ def update_user(user_id):
 
     if not all([username, nome, sobrenome, email, senha]):
         return jsonify({"error": "Todos os campos são obrigatórios!"}), 400
+    
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
 
     conn = get_db_connection()
     if not conn:
@@ -129,7 +137,7 @@ def update_user(user_id):
         conn.close()
 
 
-@users_bp.route('/changePassword/', methods=['PUT'])
+@users_bp.route('/changePassword', methods=['PUT'])
 def change_password():
     data = request.json
     username = data.get("username")
@@ -175,8 +183,13 @@ def change_password():
         conn.close()
 
 
-@users_bp.route('/delete/<int:user_id>', methods=['DELETE'])
-def delete_user(user_id):
+@users_bp.route('/delete', methods=['DELETE'])
+def delete_user():
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Usuário não está logado!"}), 401
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Erro na conexão com o banco"}), 500
@@ -188,17 +201,15 @@ def delete_user(user_id):
         user = cursor.fetchone()
 
         if not user:
-            return jsonify({"error": f"Usuário não encontrado!"}), 404
-        
+            return jsonify({"error": "Usuário não encontrado!"}), 404
+
         if user[0] == 1:
             return jsonify({"message": "Usuário já está inativo."}), 200
 
         cursor.execute("UPDATE usuarios SET inativo = 1 WHERE id = %s", (user_id,))
         conn.commit()
 
-        return jsonify({
-            "message": f"Usuário {user_id} inativado com sucesso!"
-        }), 200
+        return jsonify({"message": "Usuário inativado com sucesso!"}), 200
 
     except Exception as e:
         conn.rollback()
